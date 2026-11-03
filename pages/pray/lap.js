@@ -542,10 +542,6 @@ function startTimer(time) {
     window.time = window.time + 0.1;
 
     if (window.time > window.secondsTilLog && !window.alreadyLogged) {
-      if (!window.user_location.time_zone) {
-        window.user_location.time_zone =
-          Intl.DateTimeFormat().resolvedOptions().timeZone;
-      }
       /* send log */
       const url = `${jsObject.direct_api_url}update-location.php`;
       const user_language = getLanguageFromCookie();
@@ -681,15 +677,12 @@ window.api_fetch = function (url, options = {}) {
 };
 
 function ip_location() {
-  const user_location = localStorage.getItem("user_location");
-  window.user_location = user_location ? JSON.parse(user_location) : null;
+  const user_location = getUserLocation();
   if (
-    !window.user_location ||
-    window.user_location === "undefined" ||
-    (window.user_location.date_set &&
-      window.user_location.date_set <
-        Date.now() - 604800000) /*7 days in milliseconds*/ ||
-    !window.user_location.time_zone
+    !user_location.date_set ||
+      user_location.date_set <
+        Date.now() - 604800000 /*7 days in milliseconds*/ ||
+    !user_location.time_zone
   ) {
     return window
       .api_fetch(`https://geo.prayer.global/json`, {
@@ -705,12 +698,7 @@ function ip_location() {
             date_set: Date.now(),
             time_zone: response.location.time_zone,
           };
-          let pg_user_hash = localStorage.getItem("pg_user_hash");
-          if (!pg_user_hash || pg_user_hash === "undefined") {
-            pg_user_hash = window.crypto.randomUUID();
-            localStorage.setItem("pg_user_hash", pg_user_hash);
-          }
-          window.user_location.hash = pg_user_hash;
+          window.user_location.hash = getUserHash();
           localStorage.setItem(
             "user_location",
             JSON.stringify(window.user_location)
@@ -728,9 +716,46 @@ function ip_location() {
             }
           );
         }
-      });
+      })
   }
 }
+function getUserLocation() {
+  let user_location = null;
+  try {
+    user_location = JSON.parse(localStorage.getItem("user_location"));
+  } catch (e) {}
+
+  if (!user_location) {
+    user_location = {
+      lat: null,
+      lng: null,
+      label: null,
+      country: null,
+      date_set: null,
+      time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      hash: getUserHash()
+    }
+  }
+
+  if (!user_location.time_zone) {
+    user_location.time_zone =
+      Intl.DateTimeFormat().resolvedOptions().timeZone;
+  }
+  user_location.hash ??= getUserHash();
+
+  window.user_location = user_location
+  return user_location
+}
+
+function getUserHash() {
+  let pg_user_hash = localStorage.getItem("pg_user_hash");
+  if (!pg_user_hash || pg_user_hash === "undefined") {
+    pg_user_hash = window.crypto.randomUUID();
+    localStorage.setItem("pg_user_hash", pg_user_hash);
+  }
+  return pg_user_hash;
+}
+
 /* Fly away the see more button after a little bit of scroll */
 const seeMoreButton = document.querySelector("#see-more-button");
 if (window.scrollY < 100) {
